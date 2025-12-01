@@ -8,7 +8,6 @@ from .utils_server import set_default_page_resources, set_default_page_routes, g
 from .routes_config import *
 from .routes_model_info import *
 from .routes_presets import *
-from .routes_text_presets import *
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 DIR_WEB = os.path.abspath(f'{THIS_DIR}/../../web/')
