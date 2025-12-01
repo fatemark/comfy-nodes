@@ -1,0 +1,548 @@
+/**
+ * @fileoverview
+ * A bunch of shared utils that can be used in ComfyUI, as well as in any single-HTML pages.
+ */
+
+/**
+ * Returns a new `Resolver` type that allows creating a "disconnected" `Promise` that can be
+ * returned and resolved separately.
+ */
+export function getResolver(timeout = 5000) {
+  const resolver = {};
+  resolver.id = generateId(8);
+  resolver.completed = false;
+  resolver.resolved = false;
+  resolver.rejected = false;
+  resolver.promise = new Promise((resolve, reject) => {
+    resolver.reject = (e) => {
+      resolver.completed = true;
+      resolver.rejected = true;
+      reject(e);
+    };
+    resolver.resolve = (data) => {
+      resolver.completed = true;
+      resolver.resolved = true;
+      resolve(data);
+    };
+  });
+  resolver.timeout = setTimeout(() => {
+    if (!resolver.completed) {
+      resolver.reject();
+    }
+  }, timeout);
+  return resolver;
+}
+
+/** The WeakMap for debounced functions. */
+const DEBOUNCE_FN_TO_PROMISE = new WeakMap();
+
+/**
+ * Debounces a function call so it is only called once in the initially provided ms even if asked
+ * to be called multiple times within that period.
+ */
+export function debounce(fn, ms = 64) {
+  if (!DEBOUNCE_FN_TO_PROMISE.get(fn)) {
+    DEBOUNCE_FN_TO_PROMISE.set(
+      fn,
+      wait(ms).then(() => {
+        DEBOUNCE_FN_TO_PROMISE.delete(fn);
+        fn();
+      }),
+    );
+  }
+  return DEBOUNCE_FN_TO_PROMISE.get(fn);
+}
+
+/** Checks that a value is not falsy. */
+export function check(value, msg = "", ...args) {
+  if (!value) {
+    console.error(msg, ...(args || []));
+    throw new Error(msg || "Error");
+  }
+}
+
+/** Waits a certain number of ms, as a `Promise.` */
+export function wait(ms = 16) {
+  // Special logic, if we're waiting 16ms, then trigger on next frame.
+  if (ms === 16) {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  }
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve();
+    }, ms);
+  });
+}
+
+/** Deeply freezes the passed in object. */
+export function deepFreeze(obj) {
+  // Retrieve the property names defined on object
+  const propNames = Reflect.ownKeys(obj);
+
+  // Freeze properties before freezing self
+  for (const name of propNames) {
+    const value = obj[name];
+    if ((value && typeof value === "object") || typeof value === "function") {
+      deepFreeze(value);
+    }
+  }
+  return Object.freeze(obj);
+}
+
+function dec2hex(dec) {
+  return dec.toString(16).padStart(2, "0");
+}
+
+/** Generates an unique id of a specific length. */
+export function generateId(length) {
+  const arr = new Uint8Array(length / 2);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, dec2hex).join("");
+}
+
+/**
+ * Returns the deep value of an object given a dot-delimited key.
+ */
+export function getObjectValue(obj, objKey, def) {
+  if (!obj || !objKey) return def;
+
+  const keys = objKey.split(".");
+  const key = keys.shift();
+  const found = obj[key];
+  if (keys.length) {
+    return getObjectValue(found, keys.join("."), def);
+  }
+  return found;
+}
+
+/**
+ * Sets the deep value of an object given a dot-delimited key.
+ *
+ * By default, missing objects will be created while settng the path.  If `createMissingObjects` is
+ * set to false, then the setting will be abandoned if the key path is missing an intermediate
+ * value. For example:
+ *
+ *   setObjectValue({a: {z: false}}, 'a.b.c', true); // {a: {z: false, b: {c: true } } }
+ *   setObjectValue({a: {z: false}}, 'a.b.c', true, false); // {a: {z: false}}
+ *
+ */
+export function setObjectValue(obj, objKey, value, createMissingObjects = true) {
+  if (!obj || !objKey) return obj;
+
+  const keys = objKey.split(".");
+  const key = keys.shift();
+  if (obj[key] === undefined) {
+    if (!createMissingObjects) {
+      return;
+    }
+    obj[key] = {};
+  }
+  if (!keys.length) {
+    obj[key] = value;
+  } else {
+    if (typeof obj[key] != "object") {
+      obj[key] = {};
+    }
+    setObjectValue(obj[key], keys.join("."), value, createMissingObjects);
+  }
+  return obj;
+}
+
+/**
+ * Moves an item in an array (by item or its index) to another index.
+ */
+export function moveArrayItem(arr, itemOrFrom, to) {
+  const from = typeof itemOrFrom === "number" ? itemOrFrom : arr.indexOf(itemOrFrom);
+  arr.splice(to, 0, arr.splice(from, 1)[0]);
+}
+
+/**
+ * Moves an item in an array (by item or its index) to another index.
+ */
+export function removeArrayItem(arr, itemOrIndex) {
+  const index = typeof itemOrIndex === "number" ? itemOrIndex : arr.indexOf(itemOrIndex);
+  arr.splice(index, 1);
+}
+
+/**
+ * Injects CSS into the page with a promise when complete.
+ */
+export function injectCss(href) {
+  if (document.querySelector(`link[href^="${href}"]`)) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.setAttribute("rel", "stylesheet");
+    link.setAttribute("type", "text/css");
+    const timeout = setTimeout(resolve, 1000);
+    link.addEventListener("load", (e) => {
+      clearInterval(timeout);
+      resolve();
+    });
+    link.href = href;
+    document.head.appendChild(link);
+  });
+}
+
+/**
+ * Calls `Object.defineProperty` with special care around getters and setters to call out to a
+ * parent getter or setter (like a super.set call)   to ensure any side effects up the chain
+ * are still invoked.
+ */
+export function defineProperty(instance, property, desc) {
+  const existingDesc = Object.getOwnPropertyDescriptor(instance, property);
+  if (existingDesc?.configurable === false) {
+    throw new Error(`Error: rgthree-comfy cannot define un-configurable property "${property}"`);
+  }
+
+  if (existingDesc?.get && desc.get) {
+    const descGet = desc.get;
+    desc.get = () => {
+      existingDesc.get.apply(instance, []);
+      return descGet.apply(instance, []);
+    };
+  }
+  if (existingDesc?.set && desc.set) {
+    const descSet = desc.set;
+    desc.set = (v) => {
+      existingDesc.set.apply(instance, [v]);
+      return descSet.apply(instance, [v]);
+    };
+  }
+
+  desc.enumerable = desc.enumerable ?? existingDesc?.enumerable ?? true;
+  desc.configurable = desc.configurable ?? existingDesc?.configurable ?? true;
+  if (!desc.get && !desc.set) {
+    desc.writable = desc.writable ?? existingDesc?.writable ?? true;
+  }
+  return Object.defineProperty(instance, property, desc);
+}
+
+/**
+ * Determines if two DataViews are equal.
+ */
+export function areDataViewsEqual(a, b) {
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
+  for (let i = 0; i < a.byteLength; i++) {
+    if (a.getUint8(i) !== b.getUint8(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A cheap check if the source looks like base64.
+ */
+function looksLikeBase64(source) {
+  return source.length > 500 || source.startsWith("data:") || source.includes(";base64,");
+}
+
+/**
+ * Determines if two ArrayBuffers are equal.
+ */
+export function areArrayBuffersEqual(a, b) {
+  if (a == b || !a || !b) {
+    return a == b;
+  }
+  return areDataViewsEqual(new DataView(a), new DataView(b));
+}
+
+export function newCanvas(
+  widthOrPtOrImage,
+  height,
+) {
+  let width;
+  if (typeof widthOrPtOrImage !== "number") {
+    width = widthOrPtOrImage.width;
+    height = widthOrPtOrImage.height;
+  } else {
+    width = widthOrPtOrImage;
+  }
+  if (height == null) {
+    throw new Error("Invalid height supplied when creating new canvas object.");
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  if (widthOrPtOrImage instanceof HTMLImageElement) {
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(widthOrPtOrImage, 0, 0, width, height);
+  }
+  return canvas;
+}
+
+/**
+ * Returns canvas image data for an HTML Image.
+ */
+export function getCanvasImageData(
+  image,
+) {
+  const canvas = newCanvas(image);
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return [canvas, ctx, imageData];
+}
+
+/**
+ * Converts an ImageConverstionTypes to a base64 string.
+ */
+export async function convertToBase64(
+  source,
+) {
+  if (source instanceof Promise) {
+    source = await source;
+  }
+  if (typeof source === "string" && looksLikeBase64(source)) {
+    return source;
+  }
+  if (typeof source === "string" || source instanceof Blob || source instanceof ArrayBuffer) {
+    return convertToBase64(await loadImage(source));
+  }
+  if (source instanceof HTMLImageElement) {
+    if (looksLikeBase64(source.src)) {
+      return source.src;
+    }
+    const [canvas, ctx, imageData] = getCanvasImageData(source);
+    return convertToBase64(canvas);
+  }
+  if (source instanceof HTMLCanvasElement) {
+    return source.toDataURL("image/png");
+  }
+  throw Error("Unknown source to convert to base64.");
+}
+
+/**
+ * Converts an ImageConverstionTypes to an image array buffer.
+ */
+export async function convertToArrayBuffer(
+  source,
+) {
+  if (source instanceof Promise) {
+    source = await source;
+  }
+  if (source instanceof ArrayBuffer) {
+    return source;
+  }
+  if (typeof source === "string") {
+    if (looksLikeBase64(source)) {
+      var binaryString = atob(source.replace(/^.*?;base64,/, ""));
+      var bytes = new Uint8Array(binaryString.length);
+      for (var i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+    return convertToArrayBuffer(await loadImage(source));
+  }
+  if (source instanceof HTMLImageElement) {
+    const [canvas, ctx, imageData] = getCanvasImageData(source);
+    return convertToArrayBuffer(canvas);
+  }
+  if (source instanceof HTMLCanvasElement) {
+    return convertToArrayBuffer(source.toDataURL());
+  }
+  if (source instanceof Blob) {
+    return source.arrayBuffer();
+  }
+  throw Error("Unknown source to convert to arraybuffer.");
+}
+
+/**
+ * Loads an image into an HTMLImageElement.
+ */
+export async function loadImage(
+  source,
+) {
+  if (source instanceof Promise) {
+    source = await source;
+  }
+  if (source instanceof HTMLImageElement) {
+    return loadImage(source.src);
+  }
+  if (source instanceof Blob) {
+    return loadImage(source.arrayBuffer());
+  }
+  if (source instanceof HTMLCanvasElement) {
+    return loadImage(source.toDataURL());
+  }
+  if (source instanceof ArrayBuffer) {
+    var binary = "";
+    var bytes = new Uint8Array(source);
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return loadImage(`data:${getMimeTypeFromArrayBuffer(bytes)};base64,${btoa(binary)}`);
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.addEventListener("load", () => {
+      resolve(img);
+    });
+    img.addEventListener("error", () => {
+      reject(img);
+    });
+    img.src = source;
+  });
+}
+
+/**
+ * Determines the mime type from an array buffer.
+ */
+function getMimeTypeFromArrayBuffer(buffer) {
+  const len = 4;
+  if (buffer.length >= len) {
+    let signatureArr = new Array(len);
+    for (let i = 0; i < len; i++) signatureArr[i] = buffer[i].toString(16);
+    const signature = signatureArr.join("").toUpperCase();
+    switch (signature) {
+      case "89504E47":
+        return "image/png";
+      case "47494638":
+        return "image/gif";
+      case "25504446":
+        return "application/pdf";
+      case "FFD8FFDB":
+      case "FFD8FFE0":
+        return "image/jpeg";
+      case "504B0304":
+        return "application/zip";
+      default:
+        return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * A Broadcaster is a wrapper around a BroadcastChannel for communication with other windows.
+ */
+export class Broadcaster extends EventTarget {
+  constructor(channelName) {
+    super();
+    this.queue = {};
+    this.channel = new BroadcastChannel(channelName);
+    this.channel.addEventListener("message", (e) => {
+      this.onMessage(e);
+    });
+  }
+
+  /**
+   * Returns a unique id within the queue.
+   */
+  getId() {
+    let id;
+    do {
+      id = generateId(6);
+    } while (this.queue[id]);
+    return id;
+  }
+
+  /**
+   * Broadcasts an action, and waits for a response, with a timeout before cancelling.
+   */
+  async broadcastAndWait(
+    action,
+    payload,
+    options,
+  ) {
+    const id = this.getId();
+    this.queue[id] = getResolver(options?.timeout);
+    this.channel.postMessage({
+      id,
+      action,
+      payload,
+    });
+    let response;
+    try {
+      response = await this.queue[id].promise;
+    } catch (e) {
+      console.log("CAUGHT", e);
+      response = [];
+    }
+    return response;
+  }
+
+  broadcast(action, payload) {
+    this.channel.postMessage({
+      id: this.getId(),
+      action,
+      payload,
+    });
+  }
+
+  reply(replyId, action, payload) {
+    this.channel.postMessage({
+      id: this.getId(),
+      replyId,
+      action,
+      payload,
+    });
+  }
+
+  openWindowAndWaitForMessage(rgthreePath, windowName) {
+    const id = this.getId();
+    this.queue[id] = getResolver();
+    const win = window.open(`/rgthree/${rgthreePath}#broadcastLoadMsgId=${id}`, windowName);
+    return {window: win, promise: this.queue[id].promise};
+  }
+
+  onMessage(e) {
+    const msgId = e.data?.replyId || "";
+    const queueItem = this.queue[msgId];
+    if (queueItem) {
+      if (queueItem.completed) {
+        console.error(`${msgId} already completed..`);
+      }
+      queueItem.deferment = queueItem.deferment || {data: []};
+      queueItem.deferment.data.push(e.data.payload);
+      queueItem.deferment.timeout && clearTimeout(queueItem.deferment.timeout);
+      queueItem.deferment.timeout = setTimeout(() => {
+        queueItem.resolve(queueItem.deferment.data);
+      }, 250);
+    } else {
+      this.dispatchEvent(
+        new CustomEvent("rgthree-broadcast-message", {
+          detail: Object.assign({replyTo: e.data?.id}, e.data),
+        }),
+      );
+    }
+  }
+
+  addMessageListener(callback, options) {
+    return super.addEventListener("rgthree-broadcast-message", callback, options);
+  }
+}
+
+const broadcastChannelMap = new Map();
+
+export function broadcastOnChannel(
+  channel,
+  action,
+  payload,
+) {
+  let queue = broadcastChannelMap.get(channel);
+  if (!queue) {
+    broadcastChannelMap.set(channel, {});
+    queue = broadcastChannelMap.get(channel);
+  }
+  let id;
+  do {
+    id = generateId(6);
+  } while (queue[id]);
+  queue[id] = getResolver();
+  channel.postMessage({
+    id,
+    action,
+    payload,
+  });
+  return queue[id].promise;
+}
