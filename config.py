@@ -2,7 +2,7 @@ import os
 import json
 
 from .utils import get_dict_value, set_dict_value, dict_has_key, load_json_file
-from .pyproject import VERSION
+from .version import VERSION
 
 
 def get_config_value(key, default=None):

@@ -4,7 +4,7 @@ from aiohttp import web
 
 from server import PromptServer
 
-from ..pyproject import get_logo_svg
+from ..version import get_logo_svg
 from .utils_server import is_param_truthy, get_param
 from ..config import get_config, set_user_config, refresh_config
 
