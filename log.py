@@ -1,6 +1,6 @@
 import datetime
 import time
-from .pyproject import NAME
+from .version import NAME
 
 # https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
 # https://en.wikipedia.org/wiki/ANSI_escape_code#3-bit_and_4-bit
