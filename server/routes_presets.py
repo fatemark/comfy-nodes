@@ -12,7 +12,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 # Back up to root from server/
 ROOT_DIR = os.path.abspath(f'{THIS_DIR}/../../')
 USER_DIR = os.path.join(ROOT_DIR, 'user')
-PRESETS_FILE = os.path.join(USER_DIR, 'lora_presets.json')
+PRESETS_FILE = os.path.join(USER_DIR, 'power_lora_presets.json')
 
 if not os.path.exists(USER_DIR):
     try:
@@ -41,12 +41,12 @@ def save_presets(presets):
         log(f"Error writing presets file: {e}", color="RED")
         return False
 
-@routes.get('/rgthree/api/lora/presets')
+@routes.get('/power/api/lora/presets')
 async def api_get_presets(request):
     presets = get_presets()
     return web.json_response(presets)
 
-@routes.post('/rgthree/api/lora/presets')
+@routes.post('/power/api/lora/presets')
 async def api_save_preset(request):
     data = None
     # Handle both application/json and multipart/form-data (rgthreeApi.postJson)
@@ -86,7 +86,7 @@ async def api_save_preset(request):
     else:
         return web.json_response({"error": "Failed to save preset"}, status=500)
 
-@routes.delete('/rgthree/api/lora/presets')
+@routes.delete('/power/api/lora/presets')
 async def api_delete_preset(request):
     data = None
     try:

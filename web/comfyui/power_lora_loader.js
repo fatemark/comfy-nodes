@@ -6,7 +6,7 @@ import { addConnectionLayoutSupport } from "./utils.js";
 import { NodeTypesString } from "./constants.js";
 import { drawInfoIcon, drawNumberWidgetPart, drawRoundedRectangle, drawTogglePart, fitString, isLowQuality, } from "./utils_canvas.js";
 import { RgthreeBaseWidget, RgthreeBetterButtonWidget, RgthreeDividerWidget, } from "./utils_widgets.js";
-import { rgthreeApi } from "../../rgthree/common/rgthree_api.js";
+import { rgthreeApi, RgthreeApi } from "../../rgthree/common/rgthree_api.js";
 import { showLoraChooser } from "./utils_menu.js";
 import { moveArrayItem, removeArrayItem } from "../../rgthree/common/shared_utils.js";
 import { RgthreeLoraInfoDialog } from "./dialog_info.js";
@@ -16,16 +16,18 @@ const PROP_LABEL_SHOW_STRENGTHS_STATIC = `@${PROP_LABEL_SHOW_STRENGTHS}`;
 const PROP_VALUE_SHOW_STRENGTHS_SINGLE = "Single Strength";
 const PROP_VALUE_SHOW_STRENGTHS_SEPARATE = "Separate Model & Clip";
 
+const powerApi = new RgthreeApi('./power/api');
+
 async function getPresets() {
-    return rgthreeApi.fetchJson('/lora/presets');
+    return powerApi.fetchJson('/lora/presets');
 }
 
 async function savePreset(name, data) {
-    return rgthreeApi.postJson('/lora/presets', { name, ...data });
+    return powerApi.postJson('/lora/presets', { name, ...data });
 }
 
 async function deletePreset(name) {
-    return rgthreeApi.fetchJson('/lora/presets', {
+    return powerApi.fetchJson('/lora/presets', {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),

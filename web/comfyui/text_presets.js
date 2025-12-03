@@ -1,19 +1,21 @@
 import { app } from "../../scripts/app.js";
 import { RgthreeBaseServerNode } from "./base_node.js";
-import { rgthreeApi } from "../../rgthree/common/rgthree_api.js";
+import { rgthreeApi, RgthreeApi } from "../../rgthree/common/rgthree_api.js";
 import { RgthreeBetterButtonWidget } from "./utils_widgets.js";
 import { moveArrayItem } from "../../rgthree/common/shared_utils.js";
 
+const powerApi = new RgthreeApi('./power/api');
+
 async function getTextPresets() {
-    return rgthreeApi.fetchJson('/text/presets');
+    return powerApi.fetchJson('/text/presets');
 }
 
 async function saveTextPreset(data) {
-    return rgthreeApi.postJson('/text/presets', data);
+    return powerApi.postJson('/text/presets', data);
 }
 
 async function deleteTextPreset(data) {
-    return rgthreeApi.fetchJson('/text/presets', {
+    return powerApi.fetchJson('/text/presets', {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
