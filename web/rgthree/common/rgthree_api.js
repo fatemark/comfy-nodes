@@ -1,5 +1,5 @@
 
-class RgthreeApi {
+export class RgthreeApi {
   constructor(baseUrl) {
     this.getCheckpointsPromise = null;
     this.getSamplersPromise = null;

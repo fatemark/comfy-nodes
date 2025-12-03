@@ -8,7 +8,7 @@ from ..log import log
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(f'{THIS_DIR}/../../')
 USER_DIR = os.path.join(ROOT_DIR, 'user')
-TEXT_PRESETS_FILE = os.path.join(USER_DIR, 'text_presets.json')
+TEXT_PRESETS_FILE = os.path.join(USER_DIR, 'power_text_presets.json')
 
 if not os.path.exists(USER_DIR):
     try:
@@ -37,12 +37,12 @@ def save_text_presets(presets):
         log(f"Error writing text presets file: {e}", color="RED")
         return False
 
-@routes.get('/rgthree/api/text/presets')
+@routes.get('/power/api/text/presets')
 async def api_get_text_presets(request):
     presets = get_text_presets()
     return web.json_response(presets)
 
-@routes.post('/rgthree/api/text/presets')
+@routes.post('/power/api/text/presets')
 async def api_save_text_preset(request):
     data = None
     if request.content_type == 'application/json':
@@ -82,7 +82,7 @@ async def api_save_text_preset(request):
     else:
         return web.json_response({"error": "Failed to save preset"}, status=500)
 
-@routes.delete('/rgthree/api/text/presets')
+@routes.delete('/power/api/text/presets')
 async def api_delete_text_preset(request):
     data = None
     try:
